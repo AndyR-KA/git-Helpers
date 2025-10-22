@@ -1,4 +1,5 @@
 # Get current git branch
+write-host "starting ci run"
 $branch = git branch --show-current
 
 # Run the CI workflow on the current branch
