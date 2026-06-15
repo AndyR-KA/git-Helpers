@@ -1,0 +1,168 @@
+# Variables
+$APP_NAME = ""
+$CLIENT_APP_ID = ""
+$SCOPE_NAME = "api-access"
+$SCOPE_DESCRIPTION = "Access the application as the signed-in user"
+
+# Create the app registration
+Write-Host "Checking if app registration already exists..."
+$existingApp = az ad app list --display-name $APP_NAME --query "[0].appId" -o tsv 2>$null
+
+if ($existingApp) {
+    Write-Host "App registration '$APP_NAME' already exists with ID: $existingApp"
+    $APP_ID = $existingApp
+} else {
+    Write-Host "Creating new app registration..."
+    $APP_ID = az ad app create --display-name $APP_NAME --query appId -o tsv
+    Write-Host "Created new app registration with ID: $APP_ID"
+}
+
+# Set identifier URI based on the app ID
+$IDENTIFIER_URI = "api://$APP_ID"
+az ad app update --id $APP_ID --identifier-uris $IDENTIFIER_URI
+
+Write-Host "App ID: $APP_ID"
+
+# Configure optional claims
+Write-Host "Configuring optional claims..."
+
+# Create a temporary JSON file for optional claims
+$optionalClaimsJson = @{
+    idToken = @(
+        @{
+            name = "given_name"
+            source = $null
+            essential = $false
+            additionalProperties = @()
+        },
+        @{
+            name = "groups"
+            source = $null
+            essential = $false
+            additionalProperties = @("sam_account_name")
+        }
+    )
+    accessToken = @(
+        @{
+            name = "email"
+            source = $null
+            essential = $false
+            additionalProperties = @()
+        },
+        @{
+            name = "acct"
+            source = $null
+            essential = $false
+            additionalProperties = @()
+        },
+        @{
+            name = "given_name"
+            source = $null
+            essential = $false
+            additionalProperties = @()
+        },
+        @{
+            name = "groups"
+            source = $null
+            essential = $false
+            additionalProperties = @("sam_account_name")
+        }
+    )
+    saml2Token = @(
+        @{
+            name = "groups"
+            source = $null
+            essential = $false
+            additionalProperties = @("sam_account_name")
+        }
+    )
+}
+
+$tempFile = [System.IO.Path]::GetTempFileName()
+$optionalClaimsJson | ConvertTo-Json -Depth 5 | Out-File -FilePath $tempFile -Encoding utf8
+az ad app update --id $APP_ID --optional-claims "@$tempFile"
+Remove-Item $tempFile
+
+# Add API permissions (Microsoft Graph)
+Write-Host "Adding API permissions..."
+# Add all the scope permissions
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions bc024368-1153-4739-b217-4326f2e966d0=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 14dad69e-099b-42c9-810b-d002981feec1=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 37f7f235-527c-4136-accd-4a02d197296e=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 06da0dbc-49e2-44d2-8312-53f166ab848a=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 5f8c59db-677d-491f-a6b8-5f174b11ec1d=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions a154be20-db9c-4678-8ab7-66f6cc099a59=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions b340eb25-3456-403f-be2f-af7a0d370277=Scope
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions e1fe6dd8-ba31-4d61-89e7-88639da4683d=Scope
+
+# Add all the role permissions
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 98830695-27a2-44f7-8c18-0c3ebc9698f6=Role
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 7ab1d382-f21e-4acd-a863-ba3e13f7da61=Role
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions 5b567255-7703-4780-807c-7be8301ae99b=Role
+az ad app permission add --id $APP_ID --api 00000003-0000-0000-c000-000000000000 --api-permissions df021288-bdef-4463-88db-98f22de89214=Role
+
+
+
+# Create service principal
+Write-Host "Checking if service principal already exists..."
+$existingSp = az ad sp list --display-name $APP_NAME --query "[0].appId" -o tsv 2>$null
+
+if ($existingSp) {
+    Write-Host "Service principal for '$APP_NAME' already exists"
+} else {
+    Write-Host "Creating service principal..."
+    az ad sp create --id $APP_ID
+    Write-Host "Created service principal"
+}
+
+# Configure API scope and authorized clients
+Write-Host "Configuring API scope..."
+$scopeGuid = [guid]::NewGuid()
+
+# First, create the API scope
+$apiConfig = @{
+    oauth2PermissionScopes = @(
+        @{
+            id = $scopeGuid
+            adminConsentDescription = $SCOPE_DESCRIPTION
+            adminConsentDisplayName = $SCOPE_NAME
+            userConsentDescription = $SCOPE_DESCRIPTION
+            userConsentDisplayName = $SCOPE_NAME
+            value = $SCOPE_NAME
+            type = "User"
+            isEnabled = $true
+        }
+    )
+}
+
+$tempFile2 = [System.IO.Path]::GetTempFileName()
+$apiConfig | ConvertTo-Json -Depth 4 | Out-File -FilePath $tempFile2 -Encoding utf8
+az ad app update --id $APP_ID --set api="@$tempFile2"
+Remove-Item $tempFile2
+
+# Wait a moment for the scope to be created
+Start-Sleep -Seconds 2
+
+# Now add the pre-authorized application
+Write-Host "Adding pre-authorized client application..."
+
+# Get the current API configuration first
+$currentApi = az ad app show --id $APP_ID --query "api" -o json | ConvertFrom-Json
+
+# Add preAuthorizedApplications to the existing API config
+$currentApi | Add-Member -MemberType NoteProperty -Name "preAuthorizedApplications" -Value @(
+    @{
+        appId = $CLIENT_APP_ID
+        delegatedPermissionIds = @($scopeGuid.ToString())
+    }
+) -Force
+
+$tempFile3 = [System.IO.Path]::GetTempFileName()
+$currentApi | ConvertTo-Json -Depth 4 | Out-File -FilePath $tempFile3 -Encoding utf8
+az ad app update --id $APP_ID --set api="@$tempFile3"
+Remove-Item $tempFile3
+
+Write-Host "App registration setup complete!"
+Write-Host "App ID: $APP_ID"
+Write-Host "Identifier URI: $IDENTIFIER_URI"
