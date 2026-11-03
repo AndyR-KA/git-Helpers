@@ -13,7 +13,7 @@ if (-not $repo) {
 }
 
 if ($repo -notmatch '/') {
-    $repo = "kineticadvantagedev/$repo"
+    $repo = "$env:GITHUB_ORG/$repo"
 }
 
 # Run the CI workflow on the current branch

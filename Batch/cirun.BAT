@@ -22,7 +22,7 @@ if not defined repo (
 )
 
 
-set "repo=kineticadvantagedev/!repo!"
+set "repo=%GITHUB_ORG%/!repo!"
 
 echo Running CI workflow for !repo! on branch !branch!...
 gh workflow run "!ymlfile!.yml" --repo "!repo!" --ref "!branch!"
