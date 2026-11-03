@@ -2,22 +2,23 @@
 write-host "starting ci run"
 $branch = git branch --show-current
 
-$remoteUrl = git remote get-url origin 2>$null
-if ($remoteUrl -match 'github\.com') {
-    $repo = gh repo view --json nameWithOwner --jq '.nameWithOwner'
-}
-else {
-    $repo = Read-Host 'Enter the GitHub repo name (owner/repo)'
+$pathParts = (Get-Location).Path -split '[\\/]'
+if ($pathParts.Length -ge 3) {
+    $repo = $pathParts[3]
 }
 
 if (-not $repo) {
-    Write-Error 'Repository name is required.'
+    Write-Error "Could not determine repository name from current path: $((Get-Location).Path)"
     exit 1
+}
+
+if ($repo -notmatch '/') {
+    $repo = "kineticadvantagedev/$repo"
 }
 
 # Run the CI workflow on the current branch
 gh workflow run ci.yml --repo $repo --ref $branch
-Start-Sleep -Seconds 1
+Start-Sleep -Seconds 2
 # Get the URL of the most recent workflow run for this branch
 $runUrl = gh run list --workflow=ci.yml --repo $repo --branch=$branch --limit=1 --json url --jq ".[0].url"
 
